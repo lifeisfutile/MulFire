@@ -194,11 +194,16 @@ MulFire_Dat <- createWorkbook()
  SoilSamples_LuTable$Depth <- 10
  
  # Make an Image lookup table 
+
+#Figure out why I'm getting NA values
       tmp <- MulFire_Soil %>% 
         left_join(y = MulFire_Images, by = "SiteID", "SampDate", "EndDate")
       Image_LuTable <- tmp[, c(1:15, 24)]
  tmp <- left_join(MulFire_Soil, MulFire_Images, by = c("SiteID", "SampDate", "EndDate"))
-  ## Sending back to excel to add lat/lon
+  
+
+
+## Sending back to excel to add lat/lon
   
   
   
