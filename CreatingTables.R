@@ -151,7 +151,7 @@ MulFire_Dat <- createWorkbook()
   MulFire_Images <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire_Dat.xlsx", sheet = "Images"))                     
       
    #Order dataframes to all align/ fix other issues
-  
+  #All depths should be 10.... notes section will tell otherwise
   MulFire_Soil$Depth <- 10
   
   MulFire_Overview <- MulFire_Overview %>% 
@@ -186,7 +186,7 @@ MulFire_Dat <- createWorkbook()
  SoilSamples_LuTable <- tmp %>% 
     select(-c("SampDate.y", "EndDate.y", "SampleType",))
   
- #Make all depths 10.... not sure why it changed this
+ 
 
  
  
@@ -194,7 +194,9 @@ MulFire_Dat <- createWorkbook()
  
  
  # Make an Image lookup table 
-      tmp <- MulFire_Soil %>% 
+   
+ #Figure out why I'm getting NA values
+    tmp <- MulFire_Soil %>% 
         left_join(y = MulFire_Images, by = "SiteID", "SampDate", "EndDate")
       Image_LuTable <- tmp[, c(1:15, 24)]
  tmp <- left_join(MulFire_Soil, MulFire_Images, by = c("SiteID", "SampDate", "EndDate"))
