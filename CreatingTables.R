@@ -185,6 +185,9 @@ MulFire_Dat <- createWorkbook()
  # trim the fat
  SoilSamples_LuTable <- tmp %>% 
     select(-c("SampDate.y", "EndDate.y", "SampleType",))
+ 
+ # remove tmp
+ rm(tmp)
   
  
 
@@ -196,15 +199,33 @@ MulFire_Dat <- createWorkbook()
  # Make an Image lookup table 
    
  #Figure out why I'm getting NA values
-    tmp <- MulFire_Soil %>% 
-        left_join(y = MulFire_Images, by = "SiteID", "SampDate", "EndDate")
-      Image_LuTable <- tmp[, c(1:15, 24)]
+    
+      
  tmp <- left_join(MulFire_Soil, MulFire_Images, by = c("SiteID", "SampDate", "EndDate"))
-  ## Sending back to excel to add lat/lon
+ Image_LuTable <- tmp[, c(1:5, 10:26)]
+ Image_LuTable <- Image_LuTable %>% 
+   select(-c("South.note", "North.note", "East.note", "West.note"))
+
+ #Figure out why I'm getting NA values for image_lutable
+ 
+ #Create caubenmire Lookup table
+ 
+ 
+ Daubenmire_LuTable <- MulFire_Daubenmire %>% 
+   select(SiteID, SampDate, RepId, BareEarth, Litter, Lichen_Moss, Graminoid,
+          Forb, Shrub, Cheatgrass, Rock) %>% 
+ left_join(x = Daubenmire_LuTable, y = MulFire_Soil, by = c("SiteID", "SampDate", "RepId"))
+ ## why am i getting NA's????!!!!
+
+ Daubenmire_LuTable <- Daubenmire_LuTable[ , c(1:11, 21,23)]
+ # fix missing values for 24_FLTR north in June
+ Daubenmire_LuTable[1, 12] <- "MulFire0510"
+ Daubenmire_LuTable[1, 13] <- "24FLTR_North_1623946779170.jpg"
+ 
+ Daubenmire_LuTable[52, 12]   
   
   
-  
-  
+  ##### samp time for 6FLTR south in June is off by one second when compared to other tables.... why is this happening to me... me specifically. Why is rstudio trying to fuck me
   #### Find Missing Site!!!!!! #### 
                   
                                   
