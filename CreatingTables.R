@@ -18,6 +18,7 @@ require(palmerpenguins)
 
 #### Getting my shit and prepping my shit ####
 # for those times when the LIMS Collector app fails
+#Still need to add 21FLUT and it's images to the alcova folder
 myDir <- "//alcova.arcc.uwyo.edu/project/SoilEcologyLab/MulFire/Collector/BackupMullenFire2021"
 # for those times when alcova takes a huge shit
 myDir <- "/Users/tannerhoffman/Desktop/Mullen_Fire/MulFireJSON/"
@@ -66,10 +67,12 @@ overDF_1$SampDate <- as.Date(ymd_hms(overDF_1$SampDate))
 overDF_1$EndDate <- as.Date(ymd_hms(overDF_1$EndDate))
 
 
+
 # Add lat/lon, and merge slope and aspect from initial samples to secondary samples 
 
-overDF_1 <- overDF_1 %>% 
-  slice_head(n = 13) %>% 
+overDF_1 <- overDF_1 %>%
+  arrange(SampDate) %>% 
+  slice_head(n = 13) %>%
   select(Slope, SiteID, Aspect, Latitude, Longitude) %>%
   mutate(Latitude = c("41.017933", "41.016464", "41.026839", "41.068605",
                       "41.034371", "41.033485", "41.047661", "41.022650",
@@ -79,11 +82,12 @@ overDF_1 <- overDF_1 %>%
                        "-106.346183", "-106.342983", "-106.404309", "-106.332366",
                        "-106.326235", "-106.331602", "-106.397952", "-106.398934",
                        "-106.415366")) %>% 
-  right_join(overDF_1, by = "SiteID") %>% 
+  left_join(overDF_1, by = "SiteID") %>% 
   select(-c(Slope.y, Aspect.y, Latitude.y, Longitude.y)) %>% 
-  rename(Slope = Slope.x, Aspect = Aspect.x, Latitude = Latitude.x, Longitude = Longitude.x) %>% 
+  rename(Slope = Slope.x, Aspect = Aspect.x, 
+                      Latitude = Latitude.x, Longitude = Longitude.x) %>% 
   select(SiteID, SampDate, EndDate, Latitude, Longitude, AirTemp, 
-                      AirTempUnits, Slope, SlopeUnits, Aspect, everything()) %>% 
+                      AirTempUnits, Slope, SlopeUnits, Aspect, everything())  %>% 
   arrange(SampDate)
 
 
@@ -116,10 +120,11 @@ soilDF_1$EndDate <- as.Date(ymd_hms(soilDF_1$EndDate))
 #Fix depth to 10cm.... will have note if otherwise
 soilDF_1$Depth <- 10
 
-#Remove extra observation and Arrange values chronilogically
+#Remove extra observation, remove MulFire from barcode string, and arrange values chronilogically
 soilDF_1 <- soilDF_1 %>% 
   slice(-69) %>% 
-  arrange(by = SampDate)
+  arrange(by = SampDate) %>% 
+  mutate_at("Barcode", str_replace, "MulFire", "")
 
 
 #### Get Daubenmire table ####
@@ -161,45 +166,53 @@ for(i in 1:length(mulFile)){
                                   South = dat$siteOverview$cardinalImages$south,
                                   West = dat$siteOverview$cardinalImages$west))
 }
+  
+                    
+   
+  
+#### Import Processing Data &  Barcode Conversions ####
+ ProcessDat <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                       sheet = "Lab_Data")
+ K2SO4_Conv <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                        sheet = "K2SO4_Conversions")
+ DNA_Conv <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                          sheet = "DNA_Conversions")
+  
+     
+#### Import Data From Forest Service ####
+  ## Need to see if there is more information I can get from excel file... i.e., species in sites
+  
+MetaDat <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/2021MullenFireVegetationSampling.xlsx", col_names = TRUE)
 
-#### put all tables in excel under a single workbook####
+##Clean data
+#Get only sites I'm using, and remove excess variables 
+  MetaDat <- MetaDat %>% 
+  filter(PlotID %in% c("18FLUT", "21FLUT","24FLTR", "11FLUT", "25FLTR", "7FLTR", "2FLTR", "13FLUT", "29FLUT", "9FLUT", "21FLTR", "4FLTR", "6FLTR")) %>% 
+  select(ObjectID, SurveyDate, PlotID:NativePlantPhenologyNotes) 
+# Remove one more sneaky variable
+  MetaDat <- MetaDat[,-28]  
 
-MulFire_Dat <- createWorkbook()
+#### Create one workbook for all tables ####
+  
+  MulFire_Dat <- createWorkbook()
+  
   
   addWorksheet(MulFire_Dat, sheetName = "Overview")
   addWorksheet(MulFire_Dat, sheetName = "Soil")
   addWorksheet(MulFire_Dat, sheetName = "Daubenmire")                               
   addWorksheet(MulFire_Dat, sheetName = "Images") 
+  addWorksheet(MulFire_Dat, sheetName = "Processing_Data")
+  addWorksheet(MulFire_Dat, sheetName = "DNA_Conversions")
+  addWorksheet(MulFire_Dat, sheetName = "IC_Conversions") 
+  
   
   writeData(MulFire_Dat, "Overview", overDF_1)
   writeData(MulFire_Dat, "Soil", soilDF_1)                               
   writeData(MulFire_Dat, "Daubenmire", daubDF_1)                                
   writeData(MulFire_Dat, "Images", imageDF_1)  
+  writeData(MulFire_Dat, "Processing_Data", ProcessDat)
+  writeData(MulFire_Dat, "DNA_Conversions", DNA_Conv)                               
+  writeData(MulFire_Dat, "IC_Conversions", K2SO4_Conv) 
   
-  saveWorkbook(MulFire_Dat, file = "MulFire_Dat.xlsx", overwrite = TRUE )
-  
-  
-  
-  # retrieve data from excel 
-  MulFire_Overview <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_Dat.xlsx", sheet = "Overview"))
-  
-  MulFire_Soil <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_Dat.xlsx", sheet = "Soil"))
-  
-  MulFire_Daubenmire <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_Dat.xlsx", sheet = "Daubenmire"))        
-  
-  MulFire_Images <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_Dat.xlsx", sheet = "Images"))                     
-      
-#### Import Data From Forest Service ####
-  
-MetaDat <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/2021MullenFireVegetationSampling.xlsx",
-                      col_names = TRUE)
-
-#Clean data
-MetaDat <- MetaDat %>% 
-  filter(PlotID %in% c("18FLUT", "21FLUT","24FLTR", "11FLUT", "25FLTR", "7FLTR", "2FLTR", "13FLUT", "29FLUT", "9FLUT", "21FLTR", "4FLTR", "6FLTR")) %>% 
-  select(SurveyDate, PlotID:NativePlantPhenologyNotes) 
-
-MetaDat <- MetaDat[,-28]  
-
-  
+  saveWorkbook(MulFire_Dat, file = "MulFire_Dat.xlsx", overwrite = TRUE )  
   
