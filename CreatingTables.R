@@ -18,9 +18,10 @@ require(palmerpenguins)
 
 #### Getting my shit and prepping my shit ####
 # for those times when the LIMS Collector app fails
+#Still need to add 21FLUT and it's images to the alcova folder
 myDir <- "//alcova.arcc.uwyo.edu/project/SoilEcologyLab/MulFire/Collector/BackupMullenFire2021"
-# Used this directory from home.... issues accesing alcova through r
-myDir <- "/Users/tannerhoffman/Desktop/Mullen_Fire/BackupMullenFire2021"
+# for those times when alcova takes a huge shit
+myDir <- "/Users/tannerhoffman/Desktop/Mullen_Fire/MulFireJSON/"
 
 # Create object for muFire data
 mulFile <- dir(myDir, pattern = ".json$", full.names = TRUE, recursive = TRUE)
@@ -55,8 +56,43 @@ for(i in 1:length(mulFile)){
                                     ObserverID = paste0("[", paste0(dat$`_metadata`$observerIds, collapse=","), "]")))
 }
 
+## Clean up the table
 
-#### get soil table ####
+#All Slope units, and vegetation type are the same
+overDF_1$SlopeUnits <- "Percent"
+overDF_1$VegType <- "Sagebrush Steppe"
+
+# Remove time posixct columns.... may be screwing up *joins downstream
+overDF_1$SampDate <- as.Date(ymd_hms(overDF_1$SampDate))
+overDF_1$EndDate <- as.Date(ymd_hms(overDF_1$EndDate))
+
+
+
+# Add lat/lon, and merge slope and aspect from initial samples to secondary samples 
+
+overDF_1 <- overDF_1 %>%
+  arrange(SampDate) %>% 
+  slice_head(n = 13) %>%
+  select(Slope, SiteID, Aspect, Latitude, Longitude) %>%
+  mutate(Latitude = c("41.017933", "41.016464", "41.026839", "41.068605",
+                      "41.034371", "41.033485", "41.047661", "41.022650",
+                      "42.021726", "41.025729", "41.054962", "41.055900",
+                      "41.060507"),
+         Longitude = c("-106.304257", "-106.310048", "-106.388423", "-106.292984",
+                       "-106.346183", "-106.342983", "-106.404309", "-106.332366",
+                       "-106.326235", "-106.331602", "-106.397952", "-106.398934",
+                       "-106.415366")) %>% 
+  left_join(overDF_1, by = "SiteID") %>% 
+  select(-c(Slope.y, Aspect.y, Latitude.y, Longitude.y)) %>% 
+  rename(Slope = Slope.x, Aspect = Aspect.x, 
+                      Latitude = Latitude.x, Longitude = Longitude.x) %>% 
+  select(SiteID, SampDate, EndDate, Latitude, Longitude, AirTemp, 
+                      AirTempUnits, Slope, SlopeUnits, Aspect, everything())  %>% 
+  arrange(SampDate)
+
+
+
+#### Get soil table ####
 
 for(i in 1:length(mulFile)){
   # read in the JSON
@@ -66,7 +102,7 @@ for(i in 1:length(mulFile)){
                                 EndDate = ymd_hms(dat$`_metadata`$endTime),
                                 SampleType = "Soil",
                                 RepId = dat$soilSamples$plotNumber,
-                                Depth = as.numeric(dat$soilSamples$depth$depth),
+                                Depth = as.integer(dat$soilSamples$depth$depth),
                                 DepthUnit = dat$soilSamples$depth$depthUnits,
                                 SoilTemp = as.numeric(dat$soilSamples$soilTemp$degrees),
                                 SoilTempUnits = dat$soilSamples$soilTemp$units,
@@ -75,9 +111,21 @@ for(i in 1:length(mulFile)){
                                 AssociatedImages = dat$soilSamples$images))
 }
 
-# Arrange values chronologically 
+## Clean up table
+
+#Remove time posixct columns.... may be screwing up joins downstream
+soilDF_1$SampDate <- as.Date(ymd_hms(soilDF_1$SampDate))
+soilDF_1$EndDate <- as.Date(ymd_hms(soilDF_1$EndDate))
+
+#Fix depth to 10cm.... will have note if otherwise
+soilDF_1$Depth <- 10
+
+#Remove extra observation, remove MulFire from barcode string, and arrange values chronilogically
 soilDF_1 <- soilDF_1 %>% 
-  arrange(by = SampDate)
+  slice(-69) %>% 
+  arrange(by = SampDate) %>% 
+  mutate_at("Barcode", str_replace, "MulFire", "")
+
 
 #### Get Daubenmire table ####
 
@@ -98,6 +146,13 @@ for(i in 1:length(mulFile)){
                                   Rock = dat$soilSamples$daubenmire$Rock))
 }
 
+## Clean up table
+
+#remove extra observation
+daubDF_1 <- daubDF_1 %>% 
+  slice(-69)
+
+
 #### Get Image Table ####
 
 for(i in 1:length(mulFile)){
@@ -111,101 +166,53 @@ for(i in 1:length(mulFile)){
                                   South = dat$siteOverview$cardinalImages$south,
                                   West = dat$siteOverview$cardinalImages$west))
 }
+  
+                    
+   
+  
+#### Import Processing Data &  Barcode Conversions ####
+ ProcessDat <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                       sheet = "Lab_Data")
+ K2SO4_Conv <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                        sheet = "K2SO4_Conversions")
+ DNA_Conv <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/MulFire_LabDat.xlsx", 
+                          sheet = "DNA_Conversions")
+  
+     
+#### Import Data From Forest Service ####
+  ## Need to see if there is more information I can get from excel file... i.e., species in sites
+  
+MetaDat <- read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire/2021MullenFireVegetationSampling.xlsx", col_names = TRUE)
 
-#### Poop everything into excel for to show linda ####
+##Clean data
+#Get only sites I'm using, and remove excess variables 
+  MetaDat <- MetaDat %>% 
+  filter(PlotID %in% c("18FLUT", "21FLUT","24FLTR", "11FLUT", "25FLTR", "7FLTR", "2FLTR", "13FLUT", "29FLUT", "9FLUT", "21FLTR", "4FLTR", "6FLTR")) %>% 
+  select(ObjectID, SurveyDate, PlotID:NativePlantPhenologyNotes) 
+# Remove one more sneaky variable
+  MetaDat <- MetaDat[,-28]  
 
-MulFire_Dat <- createWorkbook()
+#### Create one workbook for all tables ####
+  
+  MulFire_Dat <- createWorkbook()
+  
   
   addWorksheet(MulFire_Dat, sheetName = "Overview")
   addWorksheet(MulFire_Dat, sheetName = "Soil")
   addWorksheet(MulFire_Dat, sheetName = "Daubenmire")                               
   addWorksheet(MulFire_Dat, sheetName = "Images") 
+  addWorksheet(MulFire_Dat, sheetName = "Processing_Data")
+  addWorksheet(MulFire_Dat, sheetName = "DNA_Conversions")
+  addWorksheet(MulFire_Dat, sheetName = "IC_Conversions") 
+  
   
   writeData(MulFire_Dat, "Overview", overDF_1)
   writeData(MulFire_Dat, "Soil", soilDF_1)                               
   writeData(MulFire_Dat, "Daubenmire", daubDF_1)                                
   writeData(MulFire_Dat, "Images", imageDF_1)  
+  writeData(MulFire_Dat, "Processing_Data", ProcessDat)
+  writeData(MulFire_Dat, "DNA_Conversions", DNA_Conv)                               
+  writeData(MulFire_Dat, "IC_Conversions", K2SO4_Conv) 
   
-  saveWorkbook(MulFire_Dat, file = "MulFire_Dat.xlsx", overwrite = TRUE )
+  saveWorkbook(MulFire_Dat, file = "MulFire_Dat.xlsx", overwrite = TRUE )  
   
-  #### Ammend Data ####
-  # All done in excell... need to do in r to keep track of workflow and changes. 
-  
-  ## 17th & 18th June 2021 
-  # 21FLTR = 21FLUT
-  # 18FLTR = 18FLUT
-  # 18FLUT = 11FLUT
-  
-  ## Removed extra row from Septemeber 21FLUT data and switched South and West soil Samples + daubenmire
-  # ATTENTION!!!!!  South and west not switched in image dataframe #
-  
- #### Bring Cleaned data back to r: Organize....Start working here.... #### 
-  
-  # retrieve data from excel 
-  MulFire_Overview <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire_Dat.xlsx", sheet = "Overview"))
-  
-  MulFire_Soil <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire_Dat.xlsx", sheet = "Soil"))
-  
-  MulFire_Daubenmire <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire_Dat.xlsx", sheet = "Daubenmire"))        
-  
-  MulFire_Images <- data.frame(read_excel("/Users/tannerhoffman/Desktop/Mullen_Fire/MulFire_Dat.xlsx", sheet = "Images"))                     
-      
-   #Order dataframes to all align/ fix other issues
-  #All depths should be 10.... notes section will tell otherwise
-  MulFire_Soil$Depth <- 10
-  
-  MulFire_Overview <- MulFire_Overview %>% 
-    arrange(by = SampDate)
-  #Slope units should have all been measured as percent... ammend this
-  MulFire_Overview$SlopeUnits <- "Percent"
-  
-  #All Sites should be logged as having sagebrush steppe vegetation
-  MulFire_Overview$VegType <- "Sagebrush Steppe"
-  
-  MulFire_Daubenmire <- MulFire_Daubenmire %>% 
-    arrange(by = SampDate)
-  
-  MulFire_Images <- MulFire_Images %>% 
-    arrange(by = SampDate)
-  
-  #### Create Lookup tables ####
-  
-  # Create Master Site table
-  BurnSev <- c("Severe", "Moderate", "Unburned", "Severe", "Light", "Light", "Severe" ,"Severe" ,"Moderate" ,"Severe" ,"Severe" ,"Severe" ,"Severe")
-  
-  MulFire_Master <- MulFire_Overview[1:13,c(1:5, 8:10, 13:15)]  %>% 
-    mutate(BurnSeverity = BurnSev)
-  str(MulFire_Master)
-  
-  #Create Soil Sample Lookup Table
-
-  #create table with barcodes + burn severity
- tmp <- left_join( x = MulFire_Soil, y = MulFire_Master, by = "SiteID")
-  
- # trim the fat
- SoilSamples_LuTable <- tmp %>% 
-    select(-c("SampDate.y", "EndDate.y", "SampleType",))
-  
- 
-
- 
- 
- #### Stop here #### 
- 
- 
- # Make an Image lookup table 
-   
- #Figure out why I'm getting NA values
-    tmp <- MulFire_Soil %>% 
-        left_join(y = MulFire_Images, by = "SiteID", "SampDate", "EndDate")
-      Image_LuTable <- tmp[, c(1:15, 24)]
- tmp <- left_join(MulFire_Soil, MulFire_Images, by = c("SiteID", "SampDate", "EndDate"))
-  ## Sending back to excel to add lat/lon
-  
-  
-  
-  
-  #### Find Missing Site!!!!!! #### 
-                  
-                                  
-                                  
